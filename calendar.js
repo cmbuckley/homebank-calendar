@@ -6,35 +6,51 @@ $(document).ready(function() {
 
         this.calendar = calendar;
         this.events = {};
-        this.assignedColors = {};
-        this.eventColors = [
-            '#fbe983', '#92e1c0', '#9fe1e7', '#cabdbf', '#fad165',
-            '#7bd148', '#b3dc6c', '#d06b64', '#fa573c', '#ff7537',
-            '#ffad46', '#9fc6e7', '#b99aff', '#cca6ac', '#42d692',
-            '#9fc6e7', '#f691b2', '#cd74e6', '#16a765', '#a47ae2',
-            '#9a9cff', '#f83a22', '#4986e7'
-        ];
+        this.colors = {};
     }
 
     HomeBank.prototype.onload = function (event) {
         var doc = $($.parseXML(event.target.result));
-        doc.find('ope').each(this.parseOperation.bind(this));
-        console.log('yep');
-        this.calendar.fullCalendar('addEventSource', this.getEvents.bind(this));
 
         var list = '<ul>';
-
-        doc.find('account').each(function (i, account) {
+        var accounts = doc.find('account');
+        accounts.each(function (i, account) {
             var account = $(account);
-            if (!(account.attr('flags') & 2) && this.assignedColors.hasOwnProperty(account.attr('key'))) {
-                list += '<li class=cat><i class=icon style="background-color: '
-                    + this.assignedColors[account.attr('key')] + '" /> '
-                    + account.attr('name') + '</li>';
-            }
+            list += '<li class=cat><i class=icon style="background-color: '
+                + this.assignColor(accounts.length, i + 1, account.attr('key')) + '" /> '
+                + account.attr('name') + '</li>';
         }.bind(this));
 
         list += '</ul>';
         $('#nav').append(list);
+
+        doc.find('ope').each(this.parseOperation.bind(this));
+        this.calendar.fullCalendar('addEventSource', this.getEvents.bind(this));
+    };
+
+    // Adapted from http://stackoverflow.com/a/7419630/283078
+    HomeBank.prototype.assignColor = function (total, current, key) {
+        var r, g, b;
+        var h = current / total;
+        var i = Math.floor(h * 6);
+        var f = h * 6 - i;
+        var q = 1 - f;
+
+        switch (i % 6) {
+            case 0: r = 1, g = f, b = 0; break;
+            case 1: r = q, g = 1, b = 0; break;
+            case 2: r = 0, g = 1, b = f; break;
+            case 3: r = 0, g = q, b = 1; break;
+            case 4: r = f, g = 0, b = 1; break;
+            case 5: r = 1, g = 0, b = q; break;
+        }
+
+        var color = '#' + ('00' + (Math.floor(r * 175) + 80).toString(16)).slice(-2)
+                        + ('00' + (Math.floor(g * 175) + 80).toString(16)).slice(-2)
+                        + ('00' + (Math.floor(b * 175) + 80).toString(16)).slice(-2);
+
+        this.colors[key] = color;
+        return color;
     };
 
     HomeBank.prototype.parseOperation = function (i, operation) {
@@ -46,9 +62,10 @@ $(document).ready(function() {
         }
 
         this.events[date].push({
-            title: this.getAmount(operation.attr('amount')) + ' ' + operation.attr('wording'),
-            start: this.getDate(operation.attr('date')) / 1000,
-            color: this.getColor(operation)
+            title:     this.getAmount(operation.attr('amount')) + ' ' + operation.attr('wording'),
+            start:     this.getDate(operation.attr('date')) / 1000,
+            color:     this.colors[operation.attr('account')],
+            textColor: 'black'
         });
     };
 
@@ -66,17 +83,6 @@ $(document).ready(function() {
         return (this.epoch + ((key - 1) * 86400000));
     };
 
-    HomeBank.prototype.getColor = function (operation) {
-        var account = operation.attr('account');
-
-        if (!(account in this.assignedColors)) {
-            this.assignedColors[account] = this.eventColors.pop();
-            console.log(account, this.assignedColors[account]);
-        }
-
-        return this.assignedColors[account];
-    };
-
     HomeBank.prototype.getEvents = function (start, end, callback) {
         var events = [];
 
@@ -86,7 +92,6 @@ $(document).ready(function() {
             }
         }.bind(this));
 
-        console.log(events);
         callback(events);
     };
 
@@ -98,11 +103,10 @@ $(document).ready(function() {
     var calendar = $('#calendar');
 
     calendar.fullCalendar({
-        theme: true,
         header: {
             left: 'today prev,next',
             center: 'title',
-            right: 'agendaDay,agendaWeek,month'
+            right: ''
         },
         editable: false,
         firstDay: 1,
